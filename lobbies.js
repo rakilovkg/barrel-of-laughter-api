@@ -2,6 +2,8 @@ const express = require("express");
 const { v4: uuidv4 } = require("uuid");
 const SSE = require('express-sse');
 
+const identityMiddleware = require("./middleware/identity");
+
 const lobbiesRouter = express.Router();
 
 const lobbies = [];
@@ -38,7 +40,7 @@ function getLobbyInfo(playerName) {
   return { isInLobby: false, isAuthor: false, players: [] };
 }
 
-lobbiesRouter.post("/", (req, res) => {
+lobbiesRouter.post("/", identityMiddleware, (req, res) => {
   const playerName = req.session.name;
 
   if (getLobbyPlayerCreated(playerName)) {
@@ -53,7 +55,7 @@ lobbiesRouter.post("/", (req, res) => {
     id: uuidv4(),
     password: generateLobbyPassword(),
     state: "waiting",
-    authorName: playerName, 
+    authorName: playerName,
     players: [],
     sse: new SSE(),
   };
@@ -62,18 +64,31 @@ lobbiesRouter.post("/", (req, res) => {
   res.status(200).json({ location: "lobby", lobby: lobbyWithoutSSE });
 });
 
-lobbiesRouter.post("/join", (req, res) => {
+lobbiesRouter.post("/join", identityMiddleware, (req, res) => {
+  if (!req.body.lobbyId || !req.body.lobbyPassword) {
+    return res.status(400).json({ message: "You must enter both lobby id and password." });
+  }
+
+  const playerName = req.session.name;
+  if (getLobbyPlayerCreated(playerName)) {
+    return res.status(400).json({ message: "You have already created a lobby. Delete the current to create new." });
+  }
+
+  if (getLobbyPlayerJoined(playerName)) {
+    return res.status(400).json({ message: "You are in a lobby. Disconnect from lobby to create yours." });
+  }
+  
   const lobby = lobbies.find(lobby => lobby.id == req.body.lobbyId);
   if (!lobby || req.body.lobbyPassword != lobby.password) {
     return res.status(400).json({ message: "Incorrect lobby id or password" });
   }
   
-  lobby.players.push(req.session.name);
-  lobby.sse.send({ type: "players", players: lobby.players });
+  lobby.players.push(playerName);
+  lobby.sse.send({ type: "player_joined", players: lobby.players });
   res.status(200).json({ location: "lobby", lobby });
 });
 
-lobbiesRouter.post("/disconnect", (req, res) => {
+lobbiesRouter.post("/disconnect", identityMiddleware, (req, res) => {
   const playerName = req.session.name;
   let isAuthor = false;
   
@@ -103,7 +118,23 @@ lobbiesRouter.post("/disconnect", (req, res) => {
   return res.status(200).json({ location: "join", lobby });
 });
 
-lobbiesRouter.get("/events", (req, res) => {
+lobbiesRouter.post("/start", identityMiddleware, (req, res) => {
+  const lobby = lobbies.find(lobby => lobby.authorName == req.session.name);
+  if (!lobby) {
+    return res.status(400).json({ message: "You haven't created any lobbies." });
+  }
+
+  if (lobby.players.length < 2) {
+    return res.status(400).json({ message: "Not enough players to start game (at least 2 needed along with author)." });
+  }
+
+  lobby.state = "active";
+  const { sse, ...lobbyWithoutSSE } = lobby;
+  lobby.sse.send({ type: "game_started", lobby: lobbyWithoutSSE });
+  res.status(200).json({ message: "The game started." });
+});
+
+lobbiesRouter.get("/events", identityMiddleware, (req, res) => {
   const { lobbyId } = req.query;
   const lobby = lobbies.find(lobby => lobby.id == lobbyId);
   if (lobby) {
