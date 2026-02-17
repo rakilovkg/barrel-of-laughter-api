@@ -12,6 +12,8 @@ const session = require('express-session');
 const { playersRouter } = require("./players");
 const { lobbiesRouter } = require("./lobbies");
 
+const identityMiddleware = require("./middleware/identity");
+
 const app = express();
 
 // CORS setup (allow frontend)
@@ -40,7 +42,7 @@ app.use(sessionParser);
 
 // Routes
 app.use("/players", playersRouter);
-app.use("/lobby", lobbiesRouter);
+app.use("/lobby", identityMiddleware, lobbiesRouter);
 
 // Create HTTP + WebSocket server
 const server = http.createServer(app);

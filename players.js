@@ -19,13 +19,8 @@ playersRouter.get('/', (req, res) => {
     return res.status(200).json(data);
   }
   
-  if (lobby.state == "waiting") {
-    data.location = "lobby";
-    data.lobby = lobby;
-    return res.status(200).json(data);
-  }
-
-  data.location = "game";
+  data.location = "lobby";
+  data.lobby = lobby;
   return res.status(200).json(data);
 });
 

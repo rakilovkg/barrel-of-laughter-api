@@ -2,8 +2,6 @@ const express = require("express");
 const { v4: uuidv4 } = require("uuid");
 const SSE = require('express-sse');
 
-const identityMiddleware = require("./middleware/identity");
-
 const lobbiesRouter = express.Router();
 
 const lobbies = [];
@@ -40,7 +38,7 @@ function getLobbyInfo(playerName) {
   return { isInLobby: false, isAuthor: false, players: [] };
 }
 
-lobbiesRouter.post("/", identityMiddleware, (req, res) => {
+lobbiesRouter.post("/", (req, res) => {
   const playerName = req.session.name;
 
   if (getLobbyPlayerCreated(playerName)) {
@@ -64,7 +62,7 @@ lobbiesRouter.post("/", identityMiddleware, (req, res) => {
   res.status(200).json({ location: "lobby", lobby: lobbyWithoutSSE });
 });
 
-lobbiesRouter.post("/join", identityMiddleware, (req, res) => {
+lobbiesRouter.post("/join", (req, res) => {
   if (!req.body.lobbyId || !req.body.lobbyPassword) {
     return res.status(400).json({ message: "You must enter both lobby id and password." });
   }
@@ -88,7 +86,7 @@ lobbiesRouter.post("/join", identityMiddleware, (req, res) => {
   res.status(200).json({ location: "lobby", lobby });
 });
 
-lobbiesRouter.post("/disconnect", identityMiddleware, (req, res) => {
+lobbiesRouter.post("/disconnect", (req, res) => {
   const playerName = req.session.name;
   let isAuthor = false;
   
@@ -118,7 +116,7 @@ lobbiesRouter.post("/disconnect", identityMiddleware, (req, res) => {
   return res.status(200).json({ location: "join", lobby });
 });
 
-lobbiesRouter.post("/start", identityMiddleware, (req, res) => {
+lobbiesRouter.post("/start", (req, res) => {
   const lobby = lobbies.find(lobby => lobby.authorName == req.session.name);
   if (!lobby) {
     return res.status(400).json({ message: "You haven't created any lobbies." });
@@ -134,7 +132,7 @@ lobbiesRouter.post("/start", identityMiddleware, (req, res) => {
   res.status(200).json({ message: "The game started." });
 });
 
-lobbiesRouter.get("/events", identityMiddleware, (req, res) => {
+lobbiesRouter.get("/events", (req, res) => {
   const { lobbyId } = req.query;
   const lobby = lobbies.find(lobby => lobby.id == lobbyId);
   if (lobby) {
