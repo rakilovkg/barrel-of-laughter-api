@@ -9,6 +9,8 @@ const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
 
+const { WebSocketServer } = require("ws");
+
 const { playersRouter } = require("./players");
 const { lobbiesRouter } = require("./lobbies");
 
@@ -44,10 +46,10 @@ app.use(sessionParser);
 app.use("/players", playersRouter);
 app.use("/lobby", identityMiddleware, lobbiesRouter);
 
-// Create HTTP + WebSocket server
+// Create HTTP Server
 const server = http.createServer(app);
 
-// Use Render-assigned port
+// Render-assigned port
 const PORT = process.env.PORT || 8443;
 
 async function startServer() {
@@ -57,3 +59,22 @@ async function startServer() {
 }
 
 startServer();
+
+// Create WebSocket Server
+const wss = new WebSocketServer({
+  server,
+});
+
+wss.on("connection", (ws, request) => {
+  sessionParser(request, {}, () => {
+    if (request.session) {
+      console.log("User connected:", request.session.name);
+
+      ws.on("message", (message) => {
+        console.log("Received:", message.toString());
+      });
+
+      ws.send("Connected to the game lobby!");
+    }
+  });
+});

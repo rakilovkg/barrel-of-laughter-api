@@ -2,6 +2,13 @@ const express = require("express");
 const { v4: uuidv4 } = require("uuid");
 const SSE = require('express-sse');
 
+const phrases = [
+
+];
+const cards = [
+  
+];
+
 const lobbiesRouter = express.Router();
 
 const lobbies = [];
@@ -42,11 +49,11 @@ lobbiesRouter.post("/", (req, res) => {
   const playerName = req.session.name;
 
   if (getLobbyPlayerCreated(playerName)) {
-    return res.status(400).json({ message: "You have already created a lobby. Delete the current to create new." });
+    return res.status(400).json({ message: "lobby_already_created" });
   }
 
   if (getLobbyPlayerJoined(playerName)) {
-    return res.status(400).json({ message: "You are in a lobby. Disconnect from lobby to create yours." });
+    return res.status(400).json({ message: "lobby_already_joined" });
   }
   
   const lobby = {
@@ -64,21 +71,21 @@ lobbiesRouter.post("/", (req, res) => {
 
 lobbiesRouter.post("/join", (req, res) => {
   if (!req.body.lobbyId || !req.body.lobbyPassword) {
-    return res.status(400).json({ message: "You must enter both lobby id and password." });
+    return res.status(400).json({ message: "input_error" });
   }
 
   const playerName = req.session.name;
   if (getLobbyPlayerCreated(playerName)) {
-    return res.status(400).json({ message: "You have already created a lobby. Delete the current to create new." });
+    return res.status(400).json({ message: "lobby_already_created" });
   }
 
   if (getLobbyPlayerJoined(playerName)) {
-    return res.status(400).json({ message: "You are in a lobby. Disconnect from lobby to create yours." });
+    return res.status(400).json({ message: "lobby_already_joined" });
   }
   
   const lobby = lobbies.find(lobby => lobby.id == req.body.lobbyId);
   if (!lobby || req.body.lobbyPassword != lobby.password) {
-    return res.status(400).json({ message: "Incorrect lobby id or password" });
+    return res.status(400).json({ message: "incorrect_lobby_input" });
   }
   
   lobby.players.push(playerName);
@@ -119,15 +126,20 @@ lobbiesRouter.post("/disconnect", (req, res) => {
 lobbiesRouter.post("/start", (req, res) => {
   const lobby = lobbies.find(lobby => lobby.authorName == req.session.name);
   if (!lobby) {
-    return res.status(400).json({ message: "You haven't created any lobbies." });
+    return res.status(400).json({ message: "lobby_required" });
   }
 
   if (lobby.players.length < 2) {
-    return res.status(400).json({ message: "Not enough players to start game (at least 2 needed along with author)." });
+    return res.status(400).json({ message: "not_enough_players" });
   }
 
+  // Initialize the lobby
   lobby.state = "active";
+  
+
+  // Send response
   const { sse, ...lobbyWithoutSSE } = lobby;
+
   lobby.sse.send({ type: "game_started", lobby: lobbyWithoutSSE });
   res.status(200).json({ message: "The game started." });
 });
