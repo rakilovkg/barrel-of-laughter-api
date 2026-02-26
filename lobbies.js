@@ -3,10 +3,141 @@ const { v4: uuidv4 } = require("uuid");
 const SSE = require('express-sse');
 
 const phrases = [
-
+  "enter_room",
+  "yar_har_har",
+  "party_slogan",
+  "whats_missing",
+  "based_government",
+  "behind_your_back",
+  "secret_agent",
+  "italian_meal",
+  "apocalypse_prevented",
+  "ew_reaction",
+  "prophecy",
+  "worst_moment_door",
+  "wedding_surprise",
+  "scientists_evolving",
+  "jury_gasped",
+  "season_warning",
+  "law_violation_arrival",
+  "economy_luxury",
+  "villain_final_form",
+  "breaking_news_missing",
+  "unknown_flying_object",
+  "carry_out_punishment",
+  "laughed_river",
+  "the_good_bad",
+  "lock_stock",
+  "secret_ingredient",
+  "what_to_propose",
+  "on_your_mind",
+  "whats_that_smell",
+  "museum_stolen",
+  "before_time",
+  "birthday_too_much",
 ];
+
 const cards = [
-  
+  "cucumber_with_legs",
+  "four_horsemen",
+  "zombie_crowbar_leg",
+  "explosion",
+  "toilet_without_seat",
+  "stinky_tofu",
+  "cactus_toilet",
+  "confident_raccoon",
+  "grandma_wifi",
+  "support_pigeons",
+  "screaming_spaghetti",
+  "tax_paying_dragon",
+  "ceo_of_soup",
+  "goose_vendetta",
+  "invisible_disco_dancers",
+  "time_traveling_sandwich",
+  "ghost_expired_milk",
+  "diabetes",
+  "conspiracy_hamster",
+  "unfinished_homework_smell",
+  "pirate_allergies",
+  "motivational_raccoon",
+  "unremovable_glitter",
+  "one_spell_wizard",
+  "anxious_spaghetti",
+  "duck_witness_protection",
+  "karaoke_ghost",
+  "cat_for_mayor",
+  "dramatic_squirrel",
+  "awkward_silence_embodiment",
+  "potato_wifi",
+  "clumsy_ninja",
+  "overcaffeinated_sloth",
+  "haunted_rubber_chicken",
+  "fridge_of_regrets",
+  "suspicious_glitter",
+  "confused_time_traveler",
+  "support_cactus",
+  "coupon_villain",
+  "medieval_chicken",
+  "three_kids_detective",
+  "disco_ball_of_doom",
+  "energy_drink_wizard",
+  "goose_wifi",
+  "cursed_karaoke_machine",
+  "coupon_dragon",
+  "interpretive_dance_battle",
+  "sentient_pizza",
+  "haunted_sock_drawer",
+  "raccoon_linkedin",
+  "pigeon_drone",
+  "wizard_unpaid_intern",
+  "anxious_moose",
+  "judging_fridge",
+  "dramatic_fog_machine",
+  "ninja_turtle_cousin",
+  "sentient_mustache",
+  "pirate_accountant",
+  "goose_knows_secrets",
+  "incorrect_booing_ghost",
+  "ketchup_fearing_vampire",
+  "screaming_poster",
+  "pool_noodle_wizard_duel",
+  "squirrel_summoning_circle",
+  "haunted_powerpoint",
+  "mayonnaise_time_machine",
+  "impostor_syndrome_dragon",
+  "rent_paying_cat",
+  "possessed_yoga_mat",
+  "karaoke_battle_death",
+  "suspicious_llama",
+  "disappearing_sock",
+  "wizard_stuck_traffic",
+  "toddler_pirate_radio",
+  "knitting_dinosaur",
+  "sentient_traffic_cone",
+  "haunted_blender",
+  "roller_skating_goose",
+  "conspiracy_parrot",
+  "sentient_spreadsheet",
+  "raccoon_law_degree",
+  "disco_skeleton",
+  "why_screaming_potato",
+  "haunted_gps",
+  "mild_inconvenience_villain",
+  "chicken_conspiracy",
+  "dramatic_chipmunk_reunion",
+  "sentient_nap",
+  "forgot_wand_wizard",
+  "goose_commitment_issues",
+  "haunted_selfie_stick",
+  "meme_hoarding_dragon",
+  "intelligent_goldfish",
+  "loud_ninja",
+  "possessed_shopping_cart",
+  "coffee_time_loop",
+  "sentient_homework",
+  "haunted_kazoo",
+  "motivational_goblin",
+  "wizard_snack_meeting"
 ];
 
 const lobbiesRouter = express.Router();
@@ -36,12 +167,12 @@ function getLobbyInfo(playerName) {
   if (createdLobbies) {
     return { isInLobby: true, isAuthor: true, players: createdLobbies.players };
   }
-  
+
   const joinedLobbies = getLobbyPlayerJoined(playerName);
   if (joinedLobbies) {
     return { isInLobby: true, isAuthor: false, players: joinedLobbies.players };
   }
-  
+
   return { isInLobby: false, isAuthor: false, players: [] };
 }
 
@@ -55,7 +186,7 @@ lobbiesRouter.post("/", (req, res) => {
   if (getLobbyPlayerJoined(playerName)) {
     return res.status(400).json({ message: "lobby_already_joined" });
   }
-  
+
   const lobby = {
     id: uuidv4(),
     password: generateLobbyPassword(),
@@ -82,12 +213,12 @@ lobbiesRouter.post("/join", (req, res) => {
   if (getLobbyPlayerJoined(playerName)) {
     return res.status(400).json({ message: "lobby_already_joined" });
   }
-  
+
   const lobby = lobbies.find(lobby => lobby.id == req.body.lobbyId);
   if (!lobby || req.body.lobbyPassword != lobby.password) {
     return res.status(400).json({ message: "incorrect_lobby_input" });
   }
-  
+
   lobby.players.push(playerName);
   lobby.sse.send({ type: "player_joined", players: lobby.players });
   res.status(200).json({ location: "lobby", lobby });
@@ -96,7 +227,7 @@ lobbiesRouter.post("/join", (req, res) => {
 lobbiesRouter.post("/disconnect", (req, res) => {
   const playerName = req.session.name;
   let isAuthor = false;
-  
+
   const lobby = lobbies.find(lobby => {
     if (lobby.authorName == playerName) {
       isAuthor = true;
@@ -135,7 +266,7 @@ lobbiesRouter.post("/start", (req, res) => {
 
   // Initialize the lobby
   lobby.state = "active";
-  
+
 
   // Send response
   const { sse, ...lobbyWithoutSSE } = lobby;
