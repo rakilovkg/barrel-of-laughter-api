@@ -152,6 +152,31 @@ function getRandomInteger(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
+function shuffle(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = getRandomInteger(0, i);
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+function initialize(lobby) {
+  lobby.state = "active";
+
+  lobby.phrases = shuffle(phrases);
+
+  const newPhrase = lobby.phrases.pop();
+  lobby.phrase = newPhrase;
+  lobby.phrases.unshift(newPhrase);
+
+  lobby.cards = shuffle(cards);
+  for (let player in lobby.players) {
+    const playerCards = lobby.cards.splice(0, 10);
+    lobby.players[player] = playerCards;
+    lobby.cards.push(...playerCards);
+  }
+}
+
 function generateLobbyPassword() {
   const allowedCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-+*/=-,.&!;";
   const passwordLength = getRandomInteger(16, 24);
@@ -192,7 +217,7 @@ lobbiesRouter.post("/", (req, res) => {
     password: generateLobbyPassword(),
     state: "waiting",
     authorName: playerName,
-    players: [],
+    players: { [playerName]: "" },
     sse: new SSE(),
   };
   lobbies.push(lobby);
@@ -219,7 +244,7 @@ lobbiesRouter.post("/join", (req, res) => {
     return res.status(400).json({ message: "incorrect_lobby_input" });
   }
 
-  lobby.players.push(playerName);
+  lobby.players[playerName] = {};
   lobby.sse.send({ type: "player_joined", players: lobby.players });
   res.status(200).json({ location: "lobby", lobby });
 });
@@ -260,13 +285,12 @@ lobbiesRouter.post("/start", (req, res) => {
     return res.status(400).json({ message: "lobby_required" });
   }
 
-  if (lobby.players.length < 2) {
+  if (lobby.players.length < 3) {
     return res.status(400).json({ message: "not_enough_players" });
   }
 
   // Initialize the lobby
-  lobby.state = "active";
-
+  initialize(lobby);
 
   // Send response
   const { sse, ...lobbyWithoutSSE } = lobby;
@@ -284,3 +308,5 @@ lobbiesRouter.get("/events", (req, res) => {
 });
 
 module.exports = { lobbiesRouter, getLobbyInfo, getLobby };
+
+
