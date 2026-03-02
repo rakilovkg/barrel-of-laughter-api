@@ -1,6 +1,5 @@
 const express = require("express");
 const { v4: uuidv4 } = require("uuid");
-const SSE = require('express-sse');
 
 const phrases = [
   "enter_room",
@@ -145,8 +144,8 @@ const lobbiesRouter = express.Router();
 const lobbies = [];
 
 const getLobbyPlayerCreated = (playerName) => lobbies.find(lobby => lobby.authorName == playerName);
-const getLobbyPlayerJoined = (playerName) => lobbies.find(lobby => lobby.players.includes(playerName));
-const getLobby = (playerName) => lobbies.find(lobby => lobby.authorName == playerName || lobby.players.includes(playerName));
+const getLobbyPlayerJoined = (playerName) => lobbies.find(lobby => playerName in lobby.players);
+const getLobby = (playerName) => lobbies.find(lobby => lobby.authorName == playerName || (playerName in lobby.players));
 
 function getRandomInteger(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1));
@@ -161,20 +160,34 @@ function shuffle(array) {
 }
 
 function initialize(lobby) {
-  lobby.state = "active";
-
   lobby.phrases = shuffle(phrases);
 
   const newPhrase = lobby.phrases.pop();
-  lobby.phrase = newPhrase;
+  lobby.currentPhrase = newPhrase;
   lobby.phrases.unshift(newPhrase);
 
   lobby.cards = shuffle(cards);
   for (let player in lobby.players) {
-    const playerCards = lobby.cards.splice(0, 10);
-    lobby.players[player] = playerCards;
-    lobby.cards.push(...playerCards);
+    const availableCards = lobby.cards.splice(0, 10);
+    lobby.players[player] = { score: 0, availableCards };
+    lobby.cards.push(...availableCards);
   }
+
+  lobby.state = "draft";
+  lobby.round = 1;
+  lobby.currentHost = 0;
+  lobby.timeRemaining = 60;
+  lobby.selectedCards = {};
+
+  const onLobbyTimeout = (lobby) => {
+    if (lobby.timeRemaining == 0) {
+      // ...
+    } else {
+      setTimeout(onLobbyTimeout, 1000);
+    }
+  };
+
+  // setTimeout(onLobbyTimeout, 1000);
 }
 
 function generateLobbyPassword() {
@@ -217,12 +230,16 @@ lobbiesRouter.post("/", (req, res) => {
     password: generateLobbyPassword(),
     state: "waiting",
     authorName: playerName,
-    players: { [playerName]: "" },
-    sse: new SSE(),
+    players: { [playerName]: {} },
   };
+
+  req.on('close', () => {
+    delete lobby.players[playerName].res;
+  });
+
   lobbies.push(lobby);
-  const { sse, ...lobbyWithoutSSE } = lobby;
-  res.status(200).json({ location: "lobby", lobby: lobbyWithoutSSE });
+  res.status(200).json({ location: "lobby", lobby });
+  res.flushHeaders();
 });
 
 lobbiesRouter.post("/join", (req, res) => {
@@ -244,9 +261,15 @@ lobbiesRouter.post("/join", (req, res) => {
     return res.status(400).json({ message: "incorrect_lobby_input" });
   }
 
-  lobby.players[playerName] = {};
-  lobby.sse.send({ type: "player_joined", players: lobby.players });
-  res.status(200).json({ location: "lobby", lobby });
+  console.log(Object.keys(lobby.players));
+  for (player in lobby.players) {
+    const data = JSON.stringify({ type: "player_joined", players: Object.keys(lobby.players) });
+    lobby.players[player].res.write(`data: ${data}\n\n`);
+  }
+
+  const { cards: _cards, phrases: _phrases, ...plainLobby } = lobby;
+  plainLobby.players = Object.keys(plainLobby.players);
+  res.status(200).json({ location: "lobby", lobby: plainLobby });
 });
 
 lobbiesRouter.post("/disconnect", (req, res) => {
@@ -259,7 +282,7 @@ lobbiesRouter.post("/disconnect", (req, res) => {
       return lobby;
     }
 
-    if (lobby.players.includes(playerName)) {
+    if (playerName in lobby.players) {
       return lobby;
     }
   });
@@ -268,12 +291,15 @@ lobbiesRouter.post("/disconnect", (req, res) => {
     return res.status(400).json({ message: "You aren't in any lobby to disconnect." });
   }
 
+  const players = Object.keys(lobby.players);
   if (isAuthor) {
+    const data = JSON.stringify({ type: "author_disconnected", players, });
+    Object.keys(lobby.players).forEach(player => player.res.write(`data: ${data}\n\n`));
     lobbies.splice(lobbies.indexOf(lobby), 1);
-    lobby.sse.send({ type: "author_disconnected", players: lobby.players, });
   } else {
-    lobby.players.splice(lobby.players.indexOf(playerName), 1);
-    lobby.sse.send({ type: "player_disconnected", players: lobby.players, });
+    delete lobby.players[playerName];
+    const data = JSON.stringify({ type: "player_disconnected", players, });
+    Object.values(lobby.players).forEach(player => player.res.write(`data: ${data}\n\n`));
   }
 
   return res.status(200).json({ location: "join", lobby });
@@ -293,19 +319,41 @@ lobbiesRouter.post("/start", (req, res) => {
   initialize(lobby);
 
   // Send response
-  const { sse, ...lobbyWithoutSSE } = lobby;
+  const { cards: _cards, phrases: _phrases, ...plainLobby } = lobby;
+  console.log(Object.keys(lobby));
 
-  lobby.sse.send({ type: "game_started", lobby: lobbyWithoutSSE });
+  // TODO
+  if (player in plainLobby.players) {
+    if (req.session.name != player) {
+      delete plainLobby.availableCards;
+      delete plainLobby.res;
+    }
+    const data = JSON.stringify({ type: "game_started", lobby: plainLobby });
+    lobby.players[player].res.write(`data: ${data}\n\n`);
+  }
+
   res.status(200).json({ message: "The game started." });
 });
 
 lobbiesRouter.get("/events", (req, res) => {
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+  });
+  res.flushHeaders();
+
   const { lobbyId } = req.query;
   const lobby = lobbies.find(lobby => lobby.id == lobbyId);
-  if (lobby) {
-    lobby.sse.init(req, res);
-  }
-});
+  if (!lobby) return;
+
+  lobby.players[req.session.name] = { res };
+
+  req.on('close', () => {
+    delete lobby.players[req.session.name].res;
+  });
+}
+);
 
 module.exports = { lobbiesRouter, getLobbyInfo, getLobby };
 

@@ -20,7 +20,11 @@ playersRouter.get('/', (req, res) => {
   }
   
   data.location = "lobby";
-  data.lobby = lobby;
+  
+  const { cards: _cards, phrases: _phrases, ...plainLobby } = lobby;
+  plainLobby.players = Object.keys(plainLobby.players);
+  data.lobby = plainLobby;
+  
   return res.status(200).json(data);
 });
 
