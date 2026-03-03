@@ -214,6 +214,8 @@ function getLobbyInfo(playerName) {
   return { isInLobby: false, isAuthor: false, players: [] };
 }
 
+const playersSSE = new Map();
+
 lobbiesRouter.post("/", (req, res) => {
   const playerName = req.session.name;
 
@@ -233,13 +235,8 @@ lobbiesRouter.post("/", (req, res) => {
     players: { [playerName]: {} },
   };
 
-  req.on('close', () => {
-    delete lobby.players[playerName].res;
-  });
-
   lobbies.push(lobby);
   res.status(200).json({ location: "lobby", lobby });
-  res.flushHeaders();
 });
 
 lobbiesRouter.post("/join", (req, res) => {
@@ -261,14 +258,16 @@ lobbiesRouter.post("/join", (req, res) => {
     return res.status(400).json({ message: "incorrect_lobby_input" });
   }
 
-  console.log(Object.keys(lobby.players));
+  lobby.players[playerName] = {};
+
   for (player in lobby.players) {
-    const data = JSON.stringify({ type: "player_joined", players: Object.keys(lobby.players) });
-    lobby.players[player].res.write(`data: ${data}\n\n`);
+    const data = JSON.stringify({ type: "player_joined", players: lobby.players, });
+    if (playersSSE.has(player)) {
+      playersSSE.get(player).write(`data: ${data}\n\n`);
+    }
   }
 
   const { cards: _cards, phrases: _phrases, ...plainLobby } = lobby;
-  plainLobby.players = Object.keys(plainLobby.players);
   res.status(200).json({ location: "lobby", lobby: plainLobby });
 });
 
@@ -277,11 +276,6 @@ lobbiesRouter.post("/disconnect", (req, res) => {
   let isAuthor = false;
 
   const lobby = lobbies.find(lobby => {
-    if (lobby.authorName == playerName) {
-      isAuthor = true;
-      return lobby;
-    }
-
     if (playerName in lobby.players) {
       return lobby;
     }
@@ -291,18 +285,18 @@ lobbiesRouter.post("/disconnect", (req, res) => {
     return res.status(400).json({ message: "You aren't in any lobby to disconnect." });
   }
 
-  const players = Object.keys(lobby.players);
   if (isAuthor) {
-    const data = JSON.stringify({ type: "author_disconnected", players, });
-    Object.keys(lobby.players).forEach(player => player.res.write(`data: ${data}\n\n`));
+    const data = JSON.stringify({ type: "author_disconnected", players: lobby.players, });
+    playersSSE.forEach(playerSSE => playerSSE.write(`data: ${data}\n\n`));
     lobbies.splice(lobbies.indexOf(lobby), 1);
   } else {
     delete lobby.players[playerName];
-    const data = JSON.stringify({ type: "player_disconnected", players, });
-    Object.values(lobby.players).forEach(player => player.res.write(`data: ${data}\n\n`));
+    const data = JSON.stringify({ type: "player_disconnected", players: lobby.players, });
+    playersSSE.forEach(playerSSE => playerSSE.write(`data: ${data}\n\n`));
   }
 
-  return res.status(200).json({ location: "join", lobby });
+  const { cards: _cards, phrases: _phrases, ...plainLobby } = lobby;
+  return res.status(200).json({ location: "join", lobby: plainLobby });
 });
 
 lobbiesRouter.post("/start", (req, res) => {
@@ -311,31 +305,46 @@ lobbiesRouter.post("/start", (req, res) => {
     return res.status(400).json({ message: "lobby_required" });
   }
 
-  if (lobby.players.length < 3) {
+  if (Object.keys(lobby.players).length < 3) {
     return res.status(400).json({ message: "not_enough_players" });
   }
 
   // Initialize the lobby
   initialize(lobby);
 
-  // Send response
-  const { cards: _cards, phrases: _phrases, ...plainLobby } = lobby;
-  console.log(Object.keys(lobby));
-
-  // TODO
-  if (player in plainLobby.players) {
-    if (req.session.name != player) {
-      delete plainLobby.availableCards;
-      delete plainLobby.res;
+  // Send initial data to players
+  for (const player in lobby.players) {
+    const plainLobby = JSON.parse(JSON.stringify(lobby));
+  
+    delete plainLobby.cards;
+    delete plainLobby.phrases;
+  
+    plainLobby.availableCards = plainLobby.players[player].availableCards;
+  
+    for (const _player in plainLobby.players) {
+      delete plainLobby.players[_player].availableCards;
     }
+  
+    plainLobby.selectedCards = Object.values(plainLobby.selectedCards);
+  
     const data = JSON.stringify({ type: "game_started", lobby: plainLobby });
-    lobby.players[player].res.write(`data: ${data}\n\n`);
+  
+    if (playersSSE.has(player)) {
+      playersSSE.get(player).write(`data: ${data}\n\n`);
+    }
   }
 
   res.status(200).json({ message: "The game started." });
 });
 
 lobbiesRouter.get("/events", (req, res) => {
+  const { lobbyId } = req.query;
+  const lobby = lobbies.find(lobby => lobby.id == lobbyId);
+  if (!lobby) return res.status(400).json({ message: "Incorrect lobby id." });
+
+  const playerName = req.session.name;
+  playersSSE.set(playerName, res);
+
   res.set({
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -343,18 +352,10 @@ lobbiesRouter.get("/events", (req, res) => {
   });
   res.flushHeaders();
 
-  const { lobbyId } = req.query;
-  const lobby = lobbies.find(lobby => lobby.id == lobbyId);
-  if (!lobby) return;
-
-  lobby.players[req.session.name] = { res };
-
   req.on('close', () => {
-    delete lobby.players[req.session.name].res;
+    playersSSE.delete(playerName);
   });
 }
 );
 
 module.exports = { lobbiesRouter, getLobbyInfo, getLobby };
-
-

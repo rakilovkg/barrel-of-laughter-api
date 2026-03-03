@@ -18,13 +18,24 @@ playersRouter.get('/', (req, res) => {
     data.location = "join";
     return res.status(200).json(data);
   }
-  
+
   data.location = "lobby";
-  
-  const { cards: _cards, phrases: _phrases, ...plainLobby } = lobby;
-  plainLobby.players = Object.keys(plainLobby.players);
+
+  const plainLobby = JSON.parse(JSON.stringify(lobby));
+  delete plainLobby.cards;
+  delete plainLobby.phrases;
+  for (player in plainLobby.players) {
+    if (player == req.session.name) {
+      plainLobby.availableCards = plainLobby.players[player].availableCards;
+    }
+    delete plainLobby.players[player].availableCards;
+  }
+
+  if (plainLobby.selectedCards) {
+    plainLobby.selectedCards = Object.keys(plainLobby.selectedCards);
+  }
   data.lobby = plainLobby;
-  
+
   return res.status(200).json(data);
 });
 
