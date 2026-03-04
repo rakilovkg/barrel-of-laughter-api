@@ -61,6 +61,8 @@ async function startServer() {
 startServer();
 
 // Create WebSocket Server
+const { getLobby } = require("./lobbies");
+
 const wss = new WebSocketServer({
   server,
 });
@@ -69,9 +71,10 @@ wss.on("connection", (ws, request) => {
   sessionParser(request, {}, () => {
     if (request.session) {
       console.log("User connected:", request.session.name);
+      const lobby = getLobby(request.session.name);
 
       ws.on("message", (message) => {
-        console.log("Received:", message.toString());
+        console.log(message.toString());
       });
 
       ws.send("Connected to the game lobby!");

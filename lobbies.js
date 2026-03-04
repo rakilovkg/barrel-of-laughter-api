@@ -145,7 +145,7 @@ const lobbies = [];
 
 const getLobbyPlayerCreated = (playerName) => lobbies.find(lobby => lobby.authorName == playerName);
 const getLobbyPlayerJoined = (playerName) => lobbies.find(lobby => playerName in lobby.players);
-const getLobby = (playerName) => lobbies.find(lobby => lobby.authorName == playerName || (playerName in lobby.players));
+const getLobby = (playerName) => lobbies.find(lobby => playerName in lobby.players);
 
 function getRandomInteger(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1));
@@ -333,6 +333,16 @@ lobbiesRouter.post("/start", (req, res) => {
       playersSSE.get(player).write(`data: ${data}\n\n`);
     }
   }
+
+  const onSecondPassed = () => {
+    if (lobby.timeRemaining > 0) {
+      lobby.timeRemaining -= 1;
+      setTimeout(onSecondPassed, 1000);    
+    } else {
+
+    }
+  };
+  setTimeout(onSecondPassed, 1000);
 
   res.status(200).json({ message: "The game started." });
 });
