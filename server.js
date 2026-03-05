@@ -67,17 +67,74 @@ const wss = new WebSocketServer({
   server,
 });
 
+const clients = new Map();
+
 wss.on("connection", (ws, request) => {
   sessionParser(request, {}, () => {
     if (request.session) {
-      console.log("User connected:", request.session.name);
-      const lobby = getLobby(request.session.name);
+      const playerName = request.session.name;
+
+      clients.set(playerName, ws);
+      ws.on("close", () => clients.delete(playerName));
 
       ws.on("message", (message) => {
-        console.log(message.toString());
+        const lobby = getLobby(playerName);
+        if (!lobby) return;
+
+        let data;
+        try {
+          data = JSON.parse(message.toString());
+        } catch (error) {
+          console.error(error);
+        }
+
+        switch (data.type) {
+          case "player_selected_card":
+            /*
+            1. Find the player's lobby.
+            2. Conditions: is draft?, not host? has not yet selected a card?
+            3. Notify other players in the lobby about the choice -> selectedCards
+            4. Send the player remaining cards
+            */
+            if (
+              lobby.state == "draft" &&
+              lobby.currentHost != playerName &&
+              !(playerName in lobby.selectedCards) &&
+              data.cardIndex >= 0 && data.cardIndex <= 9
+            ) {
+              /*
+              1. Remove card from the player
+              2. Set selected cards in lobby
+              3. Notify all players about selected cards
+              4. Notify player about remaining cards
+              */
+              const selectedCard = lobby.players[playerName].availableCards.splice(data.cardIndex, 1);
+              lobby.selectedCards[playerName] = selectedCard[0];
+              ws.send(JSON.stringify({ type: "available_cards_changed", availableCards: lobby.players[playerName].availableCards, }));
+
+              for (let player in lobby.players) {
+                const client = clients.get(player);
+                if (client && client.readyState === client.OPEN) {
+                  client.send(JSON.stringify({
+                    type: "player_selected_card",
+                    selectedCards: Object.values(lobby.selectedCards)
+                  }));
+                }
+              }
+            }
+            break;
+          case "host_selected_card":
+            /*
+            1. Find the host's lobby.
+            2. Conditions: is selection?, has not yet selected a card?
+            3. Notify other players in the lobby about the choice -> who wins?
+            4. Start match again
+            */
+            break;
+        }
       });
 
-      ws.send("Connected to the game lobby!");
+      ws.send(JSON.stringify({ message: "Connected to the game lobby!" }));
     }
   });
 });

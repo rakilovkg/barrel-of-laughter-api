@@ -32,7 +32,7 @@ playersRouter.get('/', (req, res) => {
   }
 
   if (plainLobby.selectedCards) {
-    plainLobby.selectedCards = Object.keys(plainLobby.selectedCards);
+    plainLobby.selectedCards = Object.values(plainLobby.selectedCards);
   }
   data.lobby = plainLobby;
 

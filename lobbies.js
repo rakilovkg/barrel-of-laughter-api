@@ -175,7 +175,7 @@ function initialize(lobby) {
 
   lobby.state = "draft";
   lobby.round = 1;
-  lobby.currentHost = 0;
+  lobby.currentHost = Object.keys(lobby.players)[0];
   lobby.timeRemaining = 60;
   lobby.selectedCards = {};
 
