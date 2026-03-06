@@ -186,8 +186,6 @@ function initialize(lobby) {
       setTimeout(onLobbyTimeout, 1000);
     }
   };
-
-  // setTimeout(onLobbyTimeout, 1000);
 }
 
 function generateLobbyPassword() {
@@ -335,14 +333,35 @@ lobbiesRouter.post("/start", (req, res) => {
   }
 
   const onSecondPassed = () => {
+    console.log(`Lobby time: ${lobby.timeRemaining}`);
     if (lobby.timeRemaining > 0) {
       lobby.timeRemaining -= 1;
-      setTimeout(onSecondPassed, 1000);    
+      setTimeout(onSecondPassed, 1000);
     } else {
+      // TODO: Winning condition
 
+      // State change
+      switch (lobby.state) {
+        case "draft":
+          // 2. Some players have not selected cards -> 
+          lobby.state = "judging";
+          lobby.timeRemaining = 60;
+          break;
+        case "judging":
+          lobby.state = "draft";
+          lobby.timeRemaining = 60;
+          break;
+      }
+
+      const data = JSON.stringify({ type: "state_changed", lobby: { state: lobby.state, timeRemaining: lobby.timeRemaining, currentHost: lobby.currentHost } });
+      for (let player in lobby.players) {
+        if (clients.has(player)) {
+          clients.get(player).write(`data: ${data}\n\n`);
+        }
+      }
     }
   };
-  setTimeout(onSecondPassed, 1000);
+  lobby.timeoutId = setTimeout(onSecondPassed, 1000);
 
   res.status(200).json({ message: "The game started." });
 });

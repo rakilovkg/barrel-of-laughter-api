@@ -112,6 +112,9 @@ wss.on("connection", (ws, request) => {
               lobby.selectedCards[playerName] = selectedCard[0];
               ws.send(JSON.stringify({ type: "available_cards_changed", availableCards: lobby.players[playerName].availableCards, }));
 
+              // TODO: move to judging stage if all players picked cards
+              
+
               for (let player in lobby.players) {
                 const client = clients.get(player);
                 if (client && client.readyState === client.OPEN) {
