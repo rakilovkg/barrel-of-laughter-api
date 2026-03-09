@@ -1,6 +1,8 @@
 const express = require("express");
 const { v4: uuidv4 } = require("uuid");
 
+const { EventEmitter } = require("node:events");
+
 const phrases = [
   "enter_room",
   "yar_har_har",
@@ -178,15 +180,15 @@ function initialize(lobby) {
   lobby.currentHost = Object.keys(lobby.players)[0];
   lobby.timeRemaining = 60;
   lobby.selectedCards = {};
-
-  const onLobbyTimeout = (lobby) => {
-    if (lobby.timeRemaining == 0) {
-      // ...
-    } else {
-      setTimeout(onLobbyTimeout, 1000);
-    }
-  };
 }
+
+const moveToJudgingStage = (lobby) => {
+  
+};
+
+const moveToDraftStage = (lobby) => {
+  
+};
 
 function generateLobbyPassword() {
   const allowedCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-+*/=-,.&!;";
@@ -231,6 +233,7 @@ lobbiesRouter.post("/", (req, res) => {
     state: "waiting",
     authorName: playerName,
     players: { [playerName]: {} },
+    eventEmitter: new EventEmitter(),
   };
 
   lobbies.push(lobby);
@@ -339,26 +342,37 @@ lobbiesRouter.post("/start", (req, res) => {
       setTimeout(onSecondPassed, 1000);
     } else {
       // TODO: Winning condition
+      
 
       // State change
       switch (lobby.state) {
         case "draft":
-          // 2. Some players have not selected cards -> 
+          for (let player in lobby.players) {
+            if (!(player in lobby.selectedCards)) {
+              console.log(`${player} has not selected a card.`);
+              const availableCards = lobby.players[player].availableCards;
+              const randomIndex = getRandomInteger(0, availableCards.length - 1);
+              lobby.selectedCards[player] = availableCards.splice(randomIndex, 1)[0];
+            }
+          }
           lobby.state = "judging";
           lobby.timeRemaining = 60;
           break;
         case "judging":
+          
           lobby.state = "draft";
           lobby.timeRemaining = 60;
           break;
       }
 
-      const data = JSON.stringify({ type: "state_changed", lobby: { state: lobby.state, timeRemaining: lobby.timeRemaining, currentHost: lobby.currentHost } });
-      for (let player in lobby.players) {
-        if (clients.has(player)) {
-          clients.get(player).write(`data: ${data}\n\n`);
+      lobby.eventEmitter.emit("lobby", {
+        type: "state_changed",
+        lobby: {
+          state: lobby.state,
+          timeRemaining: lobby.timeRemaining,
+          currentHost: lobby.currentHost
         }
-      }
+      });
     }
   };
   lobby.timeoutId = setTimeout(onSecondPassed, 1000);
@@ -387,4 +401,4 @@ lobbiesRouter.get("/events", (req, res) => {
 }
 );
 
-module.exports = { lobbiesRouter, getLobbyInfo, getLobby };
+module.exports = { lobbiesRouter, getLobbyInfo, getLobby, };
