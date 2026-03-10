@@ -178,7 +178,7 @@ function initialize(lobby) {
   lobby.state = "draft";
   lobby.round = 1;
   lobby.currentHost = Object.keys(lobby.players)[0];
-  lobby.timeRemaining = 60;
+  lobby.timeRemaining = 10;
   lobby.selectedCards = {};
 }
 
@@ -348,7 +348,7 @@ lobbiesRouter.post("/start", (req, res) => {
       switch (lobby.state) {
         case "draft":
           for (let player in lobby.players) {
-            if (!(player in lobby.selectedCards)) {
+            if (player != lobby.currentHost && !(player in lobby.selectedCards)) {
               console.log(`${player} has not selected a card.`);
               const availableCards = lobby.players[player].availableCards;
               const randomIndex = getRandomInteger(0, availableCards.length - 1);
@@ -356,12 +356,12 @@ lobbiesRouter.post("/start", (req, res) => {
             }
           }
           lobby.state = "judging";
-          lobby.timeRemaining = 60;
+          lobby.timeRemaining = 10;
           break;
         case "judging":
           
           lobby.state = "draft";
-          lobby.timeRemaining = 60;
+          lobby.timeRemaining = 10;
           break;
       }
 
@@ -370,7 +370,8 @@ lobbiesRouter.post("/start", (req, res) => {
         lobby: {
           state: lobby.state,
           timeRemaining: lobby.timeRemaining,
-          currentHost: lobby.currentHost
+          currentHost: lobby.currentHost,
+          selectedCards: Object.values(lobby.selectedCards),
         }
       });
     }
