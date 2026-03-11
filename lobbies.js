@@ -261,7 +261,7 @@ lobbiesRouter.post("/join", (req, res) => {
 
   lobby.players[playerName] = {};
 
-  for (player in lobby.players) {
+  for (let player in lobby.players) {
     const data = JSON.stringify({ type: "player_joined", players: lobby.players, });
     if (playersSSE.has(player)) {
       playersSSE.get(player).write(`data: ${data}\n\n`);
@@ -274,7 +274,6 @@ lobbiesRouter.post("/join", (req, res) => {
 
 lobbiesRouter.post("/disconnect", (req, res) => {
   const playerName = req.session.name;
-  let isAuthor = false;
 
   const lobby = lobbies.find(lobby => {
     if (playerName in lobby.players) {
@@ -286,6 +285,7 @@ lobbiesRouter.post("/disconnect", (req, res) => {
     return res.status(400).json({ message: "You aren't in any lobby to disconnect." });
   }
 
+  let isAuthor = lobby.authorName == playerName;
   if (isAuthor) {
     const data = JSON.stringify({ type: "author_disconnected", players: lobby.players, });
     playersSSE.forEach(playerSSE => playerSSE.write(`data: ${data}\n\n`));
