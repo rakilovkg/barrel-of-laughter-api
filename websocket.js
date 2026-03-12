@@ -84,20 +84,21 @@ const handleAction = (ws, data, playerName, lobby) => {
         const winnerName = Object.keys(lobby.selectedCards)[data.cardIndex];
         lobby.players[winnerName].score += 1;
 
+        const playersWithoutCards = Object.fromEntries(
+          Object.entries(lobby.players)
+            .map(
+              ([_player, { availableCards, ...data }]) => ([_player, { ...data }])
+            )
+        );
+
         for (let player in lobby.players) {
           let client = clients.get(player);
           if (client) {
-            const playersWithoutCards = Object.fromEntries(
-              Object.entries(lobby.players)
-                .map(
-                  ([_player, { availableCards, ...data }]) => ([_player, { ...data }])
-                )
-            );
             client.send(JSON.stringify({
               type: "host_selected_card",
               lobby: {
                 players: playersWithoutCards,
-                winningCard: data.cardIndex,
+                winningCardIndex: data.cardIndex,
               },
             }));
           }
