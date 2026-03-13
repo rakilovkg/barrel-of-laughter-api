@@ -161,6 +161,23 @@ function shuffle(array) {
   return array;
 }
 
+const playerCanSelectCard = (playerName, lobby, cardIndex) => {
+  return (
+    lobby.state == "draft" &&
+    lobby.currentHost != playerName &&
+    !(playerName in lobby.selectedCards) &&
+    cardIndex >= 0 && cardIndex <= lobby.players[playerName].availableCards.length
+  );
+};
+
+const hostCanSelectCard = (playerName, lobby, cardIndex) => {
+  return (
+    lobby.state === "judging" &&
+    lobby.currentHost === playerName &&
+    cardIndex >= 0 && cardIndex <= Object.keys(lobby.selectedCards).length
+  );
+};
+
 function initialize(lobby) {
   lobby.phrases = shuffle(phrases);
 
@@ -187,7 +204,12 @@ const moveToJudgingStage = (lobby) => {
 };
 
 const moveToDraftStage = (lobby) => {
-  
+  lobby.selectedCards = [];
+  lobby.round += 1;
+  lobby.timeRemaining = 60;
+  for (let player in lobby.players) {
+    lobby.players[player] = ;
+  }
 };
 
 function generateLobbyPassword() {
@@ -232,6 +254,7 @@ lobbiesRouter.post("/", (req, res) => {
     password: generateLobbyPassword(),
     state: "waiting",
     authorName: playerName,
+    winningCardIndex: -1,
     players: { [playerName]: {} },
     eventEmitter: new EventEmitter(),
   };
@@ -239,6 +262,113 @@ lobbiesRouter.post("/", (req, res) => {
   lobbies.push(lobby);
   res.status(200).json({ location: "lobby", lobby });
 });
+
+const player_selected_card = () => {
+  if (playerCanSelectCard(playerName, lobby, data.cardIndex)) {
+    // Update data
+    const [selectedCard] = lobby.players[playerName].availableCards.splice(data.cardIndex, 1);
+    lobby.selectedCards[playerName] = selectedCard;
+    ws.send(JSON.stringify({ type: "available_cards_changed", lobby: { availableCards: lobby.players[playerName].availableCards, } }));
+
+    // Transform output
+    const allPlayersPickedCards = Object.keys(lobby.selectedCards).length === Object.keys(lobby.players).length - 1;
+
+
+    // Notify players
+
+    // If all players picked cards -> state_changed to judging
+    
+    if (allPlayersPickedCards) {
+      lobby.state = "judging";
+      lobby.timeRemaining = 60;
+
+      for (let player in lobby.players) {
+        const client = clients.get(player);
+        if (clients) {
+          // Send state changed
+          let payload = JSON.stringify({
+            type: "state_changed",
+            lobby: {
+              state: lobby.state,
+              timeRemaining: lobby.timeRemaining,
+              currentHost: lobby.currentHost,
+              selectedCards: Object.values(lobby.selectedCards),
+            },
+          });
+          client.send(payload);
+
+          if (player == playerName) {
+            console.log(`Match!`);
+            const availableCards = lobby.players[player].availableCards;
+            payload = JSON.stringify({ type: "available_cards_changed", lobby: { availableCards } });
+            client.send(payload);
+          }
+        }
+      }
+
+      return;
+    }
+
+    // Only one player picked card -> 
+    for (let player in lobby.players) {
+      let client = clients.get(player);
+      if (client) {
+        client.send(JSON.stringify({
+          type: "player_selected_card",
+          lobby: {
+            selectedCards: Object.values(lobby.selectedCards),
+          },
+        }));
+      }
+    }
+  }
+};
+
+const host_selected_card = () => {
+  if (hostCanSelectCard(playerName, lobby, data.cardIndex)) {
+    // Update data
+    const winnerName = Object.keys(lobby.selectedCards)[data.cardIndex];
+    lobby.players[winnerName].score += 1;
+
+    // Transform data
+    const playersWithoutCards = Object.fromEntries(
+      Object.entries(lobby.players)
+        .map(
+          ([_player, { availableCards, ...data }]) => ([_player, { ...data }])
+        )
+    );
+
+    // Notify all players
+    for (let player in lobby.players) {
+      let client = clients.get(player);
+      if (client) {
+        client.send(JSON.stringify({
+          type: "host_selected_card",
+          lobby: {
+            players: playersWithoutCards,
+            winningCardIndex: data.cardIndex,
+          },
+        }));
+      }
+    }
+
+    // Set timeout for game start -> 5 seconds
+    /*
+    Game start -> give new cards, pick new phrase
+
+    setTimeout(() => moveToDraftStage(lobby), 5000);
+    */
+  }
+};
+
+const handleAction = (playerName, data) => {
+  const lobby = getLobby(playerName);
+  const actions = {
+    player_selected_card,
+    host_selected_card,
+  };
+  actions[data.type](playerName, lobby, data);
+};
 
 lobbiesRouter.post("/join", (req, res) => {
   if (!req.body.lobbyId || !req.body.lobbyPassword) {
@@ -285,7 +415,7 @@ lobbiesRouter.post("/disconnect", (req, res) => {
     return res.status(400).json({ message: "You aren't in any lobby to disconnect." });
   }
 
-  let isAuthor = lobby.authorName == playerName;
+  let isAuthor = lobby.authorName === playerName;
   if (isAuthor) {
     const data = JSON.stringify({ type: "author_disconnected", players: lobby.players, });
     playersSSE.forEach(playerSSE => playerSSE.write(`data: ${data}\n\n`));
@@ -301,7 +431,7 @@ lobbiesRouter.post("/disconnect", (req, res) => {
 });
 
 lobbiesRouter.post("/start", (req, res) => {
-  const lobby = lobbies.find(lobby => lobby.authorName == req.session.name);
+  const lobby = lobbies.find(lobby => lobby.authorName === req.session.name);
   if (!lobby) {
     return res.status(400).json({ message: "lobby_required" });
   }
@@ -402,4 +532,4 @@ lobbiesRouter.get("/events", (req, res) => {
 }
 );
 
-module.exports = { lobbiesRouter, getLobbyInfo, getLobby, };
+module.exports = { lobbiesRouter, getLobbyInfo, getLobby, handleAction, };
