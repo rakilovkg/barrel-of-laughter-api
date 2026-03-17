@@ -19,16 +19,16 @@ const startWebSocket = (server, sessionParser) => {
       const lobby = getLobby(playerName);
       if (!lobby || lobby.state == "waiting") return;
 
-      const onLobbyUpdateCallback = (data) => {
-        for (let player in data.players) {
-          let client = clients.get(player);
+      clients.set(playerName, ws);
+      
+      const onLobbyUpdateCallback = (updates) => {
+        for (let update of updates) {
+          let client = clients.get(update.player);
           if (client) {
-            client.send(JSON.stringify(data[player]));
+            client.send(JSON.stringify(update.data));
           }
         }
       };
-
-      clients.set(playerName, ws);
       lobby.eventEmitter.on("update", onLobbyUpdateCallback);
 
       ws.on("close", () => {
