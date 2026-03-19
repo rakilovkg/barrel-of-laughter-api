@@ -303,50 +303,6 @@ lobbiesRouter.post("/disconnect", (req, res) => {
   return res.status(200).json({ location: "join", lobby: plainLobby });
 });
 
-const makeLobbyUpdates = (lobby) => {
-  const updates = [];
-  const { cards, phrases, ...plainLobby } = lobby;
-  for (let player of lobby.players) {
-    const { ...lobbyCopy } = plainLobby;
-    
-    updates.push({ player });
-  }
-  return updates;
-};
-
-/*
-Initialization:
-
-Draft:
-  payload = [
-    {
-      initiator,
-
-    }
-  ]
-
-  One Selected:
-    initiator: available_cards
-    all: selected_cards
-
-  All Selected:
-    all: lobby
-
-  Draft Timeout
-    all: lobby
-
-Judging:
-  Winning Card Selected
-    Proceed to display timeout
-  Winning Card Not Selected (Timeout)
-    Pick random card
-    Proceed to display timeout
-
-Display Timeout:
-  Proceed to Draft
-*/
-
-// Actions
 const handleAction = (playerName, data) => {
   const lobby = getLobby(playerName);
   const actions = {
@@ -359,7 +315,6 @@ const handleAction = (playerName, data) => {
 const player_selected_card = (playerName, lobby, data) => {
   if (playerCanSelectCard(playerName, lobby, data.cardIndex)) {
     // Update data
-    clearTimeout(lobby.timeoutId);
     const [selectedCard] = lobby.players[playerName].availableCards.splice(data.cardIndex, 1);
     lobby.eventEmitter.emit("update", [playerName], { lobby: { availableCards: lobby.players[playerName].availableCards } });
     lobby.selectedCards[playerName] = selectedCard;
@@ -389,7 +344,12 @@ const winning_card_selected = (playerName, lobby, data) => {
     );
 
     // Notify all players
-    
+    lobby.eventEmitter.emit("update", Object.keys(lobby.players), {
+      lobby: {
+        winnerName,
+        winningCardIndex: data.cardIndex,
+      }
+    });
 
     setTimeout(() => moveToDraftStage(lobby), 5000);
   }
@@ -406,19 +366,20 @@ const initialize = (lobby) => {
   lobby.state = "draft";
   const players = Object.keys(lobby.players);
   lobby.currentHost = players[getRandomInteger(0, players.length - 1)];
-  lobby.timeRemaining = 10;
+  lobby.timeRemaining = 60;
   lobby.selectedCards = {};
 }
 
 // Completed
 const moveToJudgingStage = (lobby) => {
+  clearTimeout(lobby.timeoutId);
   lobby.state = "judging";
-  lobby.timeRemaining = 10;
+  lobby.timeRemaining = 60;
 
   lobby.eventEmitter.emit("update", Object.keys(lobby.players), { lobby: {
     state: "judging",
-    newTimeRemaining: 10,
-    timeRemaining: 10,
+    newTimeRemaining: 60,
+    timeRemaining: 60,
   } });
 };
 
@@ -426,7 +387,7 @@ const moveToDraftStage = (lobby) => {
   lobby.state = "draft";
   lobby.selectedCards = [];
   lobby.round += 1;
-  lobby.timeRemaining = 10;
+  lobby.timeRemaining = 60;
   // Assign new host
   const players = Object.keys(lobby.players)
   const currentHostIndex = players.indexOf(lobby.currentHost);
@@ -446,8 +407,8 @@ const moveToDraftStage = (lobby) => {
     state: "draft",
     selectedCards: [],
     round: lobby.round,
-    newTimeRemaining: 10,
-    timeRemaining: 10,
+    newTimeRemaining: 60,
+    timeRemaining: 60,
 
     currentHost: lobby.currentHost,
   } });
@@ -463,7 +424,7 @@ const onDraftStageTimeout = (lobby) => {
       lobby.selectedCards[player] = availableCards.splice(randomIndex, 1)[0];
 
       lobby.eventEmitter.emit("update", [player], { lobby: { availableCards } });
-      lobby.eventEmitter.emit("update", Object.keys(lobby.players), { lobby: { selectedCards: lobby.selectedCards } });
+      lobby.eventEmitter.emit("update", Object.keys(lobby.players), { lobby: { selectedCards: Object.values(lobby.selectedCards) } });
     }
   }
   
@@ -486,7 +447,7 @@ const onJudgingStageTimeout = (lobby) => {
   const players = Object.keys(lobby.players);
   
   lobby.currentHost = players[getRandomInteger(0, players.length - 1)];
-  lobby.timeRemaining = 10;
+  lobby.timeRemaining = 60;
   lobby.selectedCards = {};
   
   lobby.winningCardIndex = -1;
@@ -528,6 +489,7 @@ lobbiesRouter.post("/start", (req, res) => {
   }
 
   const onSecondPassed = () => {
+    console.log(lobby.timeRemaining);
     if (lobby.timeRemaining > 0) {
       lobby.timeRemaining -= 1;
       lobby.timeoutId = setTimeout(onSecondPassed, 1000);

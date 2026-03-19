@@ -21,12 +21,13 @@ playersRouter.get('/', (req, res) => {
 
   data.location = "lobby";
 
-  const plainLobby = JSON.parse(JSON.stringify(lobby));
-  delete plainLobby.cards;
-  delete plainLobby.phrases;
+  let { cards, phrases, timeoutId, eventEmitter, ...plainLobby } = lobby;
+  plainLobby = JSON.parse(JSON.stringify(plainLobby));
+  
   for (player in plainLobby.players) {
     if (player == req.session.name) {
       plainLobby.availableCards = plainLobby.players[player].availableCards;
+      console.log(`Cards of ${player}: `, plainLobby.availableCards);
     }
     delete plainLobby.players[player].availableCards;
   }
