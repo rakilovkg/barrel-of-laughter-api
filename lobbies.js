@@ -188,7 +188,8 @@ const hostCanSelectCard = (playerName, lobby, cardIndex) => {
   return (
     lobby.state === "judging" &&
     lobby.currentHost === playerName &&
-    cardIndex >= 0 && cardIndex <= Object.keys(lobby.selectedCards).length
+    cardIndex >= 0 && cardIndex <= Object.keys(lobby.selectedCards).length &&
+    !lobby.winnerName
   );
 };
 
@@ -334,24 +335,39 @@ const winning_card_selected = (playerName, lobby, data) => {
     clearTimeout(lobby.timeoutId);
     const winnerName = Object.keys(lobby.selectedCards)[data.cardIndex];
     lobby.players[winnerName].score += 1;
+    lobby.winnerName = winnerName;
 
-    // Transform data
-    const playersWithoutCards = Object.fromEntries(
-      Object.entries(lobby.players)
-        .map(
-          ([_player, { availableCards, ...data }]) => ([_player, { ...data }])
-        )
-    );
+    lobby.timeRemaining = 5;
 
     // Notify all players
-    lobby.eventEmitter.emit("update", Object.keys(lobby.players), {
+    const playersToUpdate = [];
+    const players = {};
+    for (let player in lobby.players) {
+      playersToUpdate.push(player);
+      players[player] = { score: lobby.players[player].score };
+    }
+
+    lobby.eventEmitter.emit("update", playersToUpdate, {
       lobby: {
         winnerName,
         winningCardIndex: data.cardIndex,
+        players,
+        timeRemaining: 5,
+        newTimeRemaining: 5,
       }
     });
 
-    setTimeout(() => moveToDraftStage(lobby), 5000);
+    const onSecondPassed = (lobby) => {
+      lobby.timeRemaining -= 1;
+
+      if (lobby.timeRemaining > 0) {
+        setTimeout(onSecondPassed, 1000);
+      } else {
+        moveToDraftStage(lobby);
+      }
+    };
+
+    setTimeout(() => onSecondPassed(lobby), 1000);
   }
 };
 
@@ -497,6 +513,7 @@ lobbiesRouter.post("/start", (req, res) => {
     }
 
     // TODO: Check game over condition
+
 
     // State change
     switch (lobby.state) {
