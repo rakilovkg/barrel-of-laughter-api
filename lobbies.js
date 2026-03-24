@@ -141,6 +141,8 @@ const cards = [
   "wizard_snack_meeting"
 ];
 
+const roundDuration = 30;
+
 const lobbiesRouter = express.Router();
 
 const lobbies = [];
@@ -384,7 +386,7 @@ const initialize = (lobby) => {
   lobby.state = "draft";
   const players = Object.keys(lobby.players);
   lobby.currentHost = players[getRandomInteger(0, players.length - 1)];
-  lobby.timeRemaining = 60;
+  lobby.timeRemaining = roundDuration;
   lobby.selectedCards = {};
 }
 
@@ -392,11 +394,11 @@ const initialize = (lobby) => {
 const moveToJudgingStage = (lobby) => {
   clearTimeout(lobby.timeoutId);
   lobby.state = "judging";
-  lobby.timeRemaining = 60;
+  lobby.timeRemaining = roundDuration;
 
   lobby.eventEmitter.emit("update", Object.keys(lobby.players), { lobby: {
     state: "judging",
-    timeRemaining: 60,
+    timeRemaining: roundDuration,
   } });
 
   const onJudgingStateSecondPassed = (lobby) => {
@@ -418,7 +420,7 @@ const moveToDraftStage = (lobby) => {
   lobby.state = "draft";
   lobby.selectedCards = {};
   lobby.round += 1;
-  lobby.timeRemaining = 60;
+  lobby.timeRemaining = roundDuration;
   // Assign new phrase
   pickPhrase(lobby);
   // Give players random new cards
@@ -446,7 +448,7 @@ const moveToDraftStage = (lobby) => {
     state: "draft",
     selectedCards: [],
     round: lobby.round,
-    timeRemaining: 60,
+    timeRemaining: roundDuration,
     currentHost: lobby.currentHost,
 
     winnerName: "",
@@ -489,12 +491,33 @@ const onDraftStateSecondPassed = (lobby) => {
 const onJudgingStateTimeout = (lobby) => {
   // Select a random card if the host has not done so
   const selectedCards = Object.entries(lobby.selectedCards);
-  const winningCardIndex = getRandomInteger(0, selectedCards.length);
+  console.log("Cards: ", selectedCards);
+  const winningCardIndex = getRandomInteger(0, selectedCards.length - 1);
+  console.log("Winning card index: ", winningCardIndex);
   const winningEntry = selectedCards[winningCardIndex];
+  console.log("Winning entry: ", winningEntry);
   const winnerName = winningEntry[0];
-  lobby.players[winningPlayer].score += 1;
+
+  lobby.players[winnerName].score += 1;
   lobby.winnerName = winnerName;
   lobby.winningCardIndex = winningCardIndex;
+  lobby.timeRemaining = 5;
+
+  // Transform data
+  const players = {};
+  for (let player in lobby.players) {
+    players[player] = { score: lobby.players[player].score };
+  }
+
+  // 
+  lobby.eventEmitter.emit("update", Object.keys(players), {
+    lobby: {
+      winnerName,
+      winningCardIndex,
+      players,
+      timeRemaining: 5,
+    }
+  });
 
   // Start countdowm
   const onSecondPassed = (lobby) => {
