@@ -246,6 +246,14 @@ lobbiesRouter.post("/", (req, res) => {
   res.status(200).json({ location: "lobby", lobby });
 });
 
+lobbiesRouter.post("/play-again", (req, res) => {
+
+});
+
+lobbiesRouter.post("/back-to-lobby", (req, res) => {
+  
+});
+
 lobbiesRouter.post("/join", (req, res) => {
   if (!req.body.lobbyId || !req.body.lobbyPassword) {
     return res.status(400).json({ message: "input_error" });
@@ -383,7 +391,8 @@ const initialize = (lobby) => {
   const players = Object.keys(lobby.players);
 
   lobby.round = 1;
-  lobby.roundsToPlay = players.length * 3 + getRandomInteger(1, 3);
+  lobby.roundsToPlay = 3; // players.length * 3 + getRandomInteger(1, 3);
+  console.log(`Rounds to play: ${lobby.roundsToPlay}`);
   pickPhrase(lobby);
   pickInitialCardsForPlayers(lobby);
   lobby.state = "draft";
@@ -416,19 +425,28 @@ const moveToJudgingStage = (lobby) => {
 };
 
 const checkGameOver = (lobby) => {
-  console.log(`Moving to draft stage: ${lobby.round} out of ${lobby.roundsToPlay}`);
   if (lobby.round == lobby.roundsToPlay) {
-    lobby.state = "game_over";
-    // Get winner
     const winners = [];
-    for (let [player, { score }] of Object.entries(lobby.players)) {
-      
-    }
-    lobby.winners = winner;
+    let maxScore = -1;
+    for (let player in lobby.players) {
+      const playerData = lobby.players[player];
 
-    lobby.eventEmitter.emit("update", [player], {
+      if (playerData.score > maxScore) {
+        maxScore = playerData.score;
+        winners.length = 0;
+      }
+
+      if (playerData.score === maxScore) {
+        winners.push(player);
+      }
+    }
+
+    lobby.state = "game_over";
+    lobby.winners = winners;
+
+    lobby.eventEmitter.emit("update", Object.keys(lobby.players), {
       lobby: {
-        state: "game_over",
+        state: lobby.state,
         winners,
       }
     });
