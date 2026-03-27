@@ -22,6 +22,7 @@ const startWebSocket = (server, sessionParser) => {
       clients.set(playerName, ws);
       
       const onLobbyUpdateCallback = (players, data) => {
+        
         for (let player of players) {
           let client = clients.get(player);
           if (client) {
@@ -46,8 +47,6 @@ const startWebSocket = (server, sessionParser) => {
 
         handleAction(playerName, data);
       });
-
-      // ws.send(JSON.stringify({ message: "Connected to the game lobby!" }));
     });
   });
 };

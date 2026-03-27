@@ -27,7 +27,6 @@ playersRouter.get('/', (req, res) => {
   for (player in plainLobby.players) {
     if (player == req.session.name) {
       plainLobby.availableCards = plainLobby.players[player].availableCards;
-      console.log(`Cards of ${player}: `, plainLobby.availableCards);
     }
     delete plainLobby.players[player].availableCards;
   }

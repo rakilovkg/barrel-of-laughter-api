@@ -141,7 +141,7 @@ const cards = [
   "wizard_snack_meeting"
 ];
 
-const roundDuration = 30;
+const roundDuration = 5;
 
 const lobbiesRouter = express.Router();
 
@@ -247,11 +247,56 @@ lobbiesRouter.post("/", (req, res) => {
 });
 
 lobbiesRouter.post("/play-again", (req, res) => {
+  const playerName = req.session.name;
+  const lobby = getLobbyPlayerCreated(playerName);
+  if (!lobby) {
+    return res.status(400).json({ message: "lobby_required" });
+  }
 
+  if (lobby.state != "game_over") {
+    return res.status(400).json({ message: "input_error" });
+  }
+
+  initialize(lobby);
+
+  for (const player in lobby.players) {
+    const plainLobby = JSON.parse(JSON.stringify(lobby));
+
+    delete plainLobby.cards;
+    delete plainLobby.phrases;
+
+    plainLobby.availableCards = plainLobby.players[player].availableCards;
+
+    for (const _player in plainLobby.players) {
+      delete plainLobby.players[_player].availableCards;
+    }
+
+    plainLobby.selectedCards = Object.values(plainLobby.selectedCards);
+
+    lobby.eventEmitter.emit("update", [player], {
+      lobby: plainLobby,
+    });
+  }
+
+  lobby.timeoutId = setTimeout(() => onDraftStateSecondPassed(lobby), 1000);
 });
 
 lobbiesRouter.post("/back-to-lobby", (req, res) => {
-  
+  const playerName = req.session.name;
+  const lobby = getLobbyPlayerCreated(playerName);
+  if (!lobby) {
+    return res.status(400).json({ message: "lobby_required" });
+  }
+
+  if (lobby.state != "game_over") {
+    return res.status(400).json({ message: "input_error" });
+  }
+
+  lobby.state = "waiting";
+
+  lobby.eventEmitter.emit("update", Object.keys(lobby.players), {
+    lobby: { state: lobby.state, }
+  });
 });
 
 lobbiesRouter.post("/join", (req, res) => {
@@ -370,7 +415,6 @@ const winning_card_selected = (playerName, lobby, data) => {
     // 5 second pause before next round
     const onSecondPassed = (lobby) => {
       lobby.timeRemaining -= 1;
-      console.log(`Countdown to draft timer: ${lobby.timeRemaining}`);
 
       if (lobby.timeRemaining > 0) {
         setTimeout(() => onSecondPassed(lobby), 1000);
@@ -392,13 +436,15 @@ const initialize = (lobby) => {
 
   lobby.round = 1;
   lobby.roundsToPlay = 3; // players.length * 3 + getRandomInteger(1, 3);
-  console.log(`Rounds to play: ${lobby.roundsToPlay}`);
   pickPhrase(lobby);
   pickInitialCardsForPlayers(lobby);
   lobby.state = "draft";
   lobby.currentHost = players[getRandomInteger(0, players.length - 1)];
   lobby.timeRemaining = roundDuration;
   lobby.selectedCards = {};
+
+  lobby.winnerName = "";
+  lobby.winningCardIndex = -1;
 }
 
 // Completed
@@ -530,11 +576,8 @@ const onDraftStateSecondPassed = (lobby) => {
 const onJudgingStateTimeout = (lobby) => {
   // Select a random card if the host has not done so
   const selectedCards = Object.entries(lobby.selectedCards);
-  console.log("Cards: ", selectedCards);
   const winningCardIndex = getRandomInteger(0, selectedCards.length - 1);
-  console.log("Winning card index: ", winningCardIndex);
   const winningEntry = selectedCards[winningCardIndex];
-  console.log("Winning entry: ", winningEntry);
   const winnerName = winningEntry[0];
 
   lobby.players[winnerName].score += 1;
