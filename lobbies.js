@@ -512,7 +512,7 @@ const moveToDraftStage = (lobby) => {
   lobby.timeRemaining = roundDuration;
   // Assign new phrase
   pickPhrase(lobby);
-  
+
   // Give players random new cards except for the host
   for (let player in lobby.players) {
     if (player == lobby.currentHost) {
@@ -541,6 +541,7 @@ const moveToDraftStage = (lobby) => {
     round: lobby.round,
     timeRemaining: roundDuration,
     currentHost: lobby.currentHost,
+    currentPhrase: lobby.currentPhrase,
 
     winnerName: "",
     winningCardIndex: -1,
