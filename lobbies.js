@@ -141,7 +141,7 @@ const cards = [
   "wizard_snack_meeting"
 ];
 
-const roundDuration = 5;
+const roundDuration = 60;
 
 const lobbiesRouter = express.Router();
 
@@ -272,6 +272,7 @@ lobbiesRouter.post("/play-again", (req, res) => {
     }
 
     plainLobby.selectedCards = Object.values(plainLobby.selectedCards);
+    plainLobby.timeRemaining = roundDuration;
 
     lobby.eventEmitter.emit("update", [player], {
       lobby: plainLobby,
@@ -511,7 +512,8 @@ const moveToDraftStage = (lobby) => {
   lobby.timeRemaining = roundDuration;
   // Assign new phrase
   pickPhrase(lobby);
-  // Give players random new cards
+  
+  // Give players random new cards except for the host
   for (let player in lobby.players) {
     if (player == lobby.currentHost) {
       continue;
@@ -526,6 +528,7 @@ const moveToDraftStage = (lobby) => {
       lobby: { availableCards, }
     });
   }
+  
   // Assign new host
   const players = Object.keys(lobby.players);
   const currentHostIndex = players.indexOf(lobby.currentHost);
